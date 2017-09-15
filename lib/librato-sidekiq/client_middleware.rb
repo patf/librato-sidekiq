@@ -20,6 +20,8 @@ module Librato
         tracking_group.group queue.to_s do |q|
           q.increment 'queued'
 
+          next unless class_metrics_enabled
+
           # using something like User.delay.send_email invokes
           # a class name with slashes. remove them in favor of underscores
           q.group msg['class'].underscore.gsub('/', '_') do |w|
