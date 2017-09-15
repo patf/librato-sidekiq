@@ -3,7 +3,7 @@ require 'active_support/core_ext/class/attribute_accessors'
 module Librato
   module Sidekiq
     class Middleware
-      cattr_accessor :enabled do
+      cattr_accessor :enabled, :class_metrics_enabled do
         true
       end
 
@@ -49,6 +49,7 @@ module Librato
       def self.options
         {
           enabled: enabled,
+          class_metrics_enabled: class_metrics_enabled,
           whitelist_queues: whitelist_queues,
           blacklist_queues: blacklist_queues,
           whitelist_classes: whitelist_classes,
@@ -85,6 +86,8 @@ module Librato
           q.increment 'processed'
           q.timing 'time', elapsed
           q.measure 'enqueued', stats.queues[queue].to_i
+
+          next unless class_metrics_enabled
 
           # using something like User.delay.send_email invokes
           # a class name with slashes. remove them in favor of underscores

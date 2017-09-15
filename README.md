@@ -52,6 +52,8 @@ Librato::Sidekiq accepts the following options.
 
 **enabled**: Boolean, true by default
 
+**class_metrics_enabled**: Boolean, true by default. If set to false, metrics on individual worker classes are not collected.
+
 **whitelist_queues**: Array, list of queue names that will be the only ones sent to Librato (optional)
 
 **blacklist_queues**: Array, list of queue names that will not be sent to Librato (optional)
