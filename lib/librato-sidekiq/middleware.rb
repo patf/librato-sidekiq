@@ -86,6 +86,7 @@ module Librato
           q.increment 'processed'
           q.timing 'time', elapsed
           q.measure 'enqueued', stats.queues[queue].to_i
+          q.timing 'latency', ::Sidekiq::Queue.new(queue).latency
 
           next unless class_metrics_enabled
 
