@@ -13,19 +13,20 @@ module Librato
 
       protected
 
-      def track(tracking_group, stats, worker_instance, msg, queue, elapsed)
-        tracking_group.increment 'queued'
-        return unless allowed_to_submit queue, worker_instance
-        # puts "doing Librato insert"
-        tracking_group.group queue.to_s do |q|
-          q.increment 'queued'
+      def track(stats, worker_instance, msg, queue, elapsed, status_bucket)
+        Librato.group 'sidekiq' do |sidekiq|
+          sidekiq.increment 'queued'
+          return unless allowed_to_submit queue, worker_instance
+          sidekiq.group queue.to_s do |q|
+            q.increment 'queued'
 
-          next unless class_metrics_enabled
+            next unless class_metrics_enabled
 
-          # using something like User.delay.send_email invokes
-          # a class name with slashes. remove them in favor of underscores
-          q.group msg['class'].underscore.gsub('/', '_') do |w|
-            w.increment 'queued'
+            # using something like User.delay.send_email invokes
+            # a class name with slashes. remove them in favor of underscores
+            q.group msg['class'].underscore.gsub('/', '_') do |w|
+              w.increment 'queued'
+            end
           end
         end
       end

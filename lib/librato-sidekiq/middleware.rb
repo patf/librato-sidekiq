@@ -62,39 +62,40 @@ module Librato
       def call(worker_instance, msg, queue, redis_pool = nil)
         start_time = Time.now
         result = yield
-        elapsed = (Time.now - start_time).to_f
-
-        return result unless enabled
-        # puts "#{worker_instance} #{queue}"
-
         stats = ::Sidekiq::Stats.new
-
-        Librato.group 'sidekiq' do |sidekiq|
-          track sidekiq, stats, worker_instance, msg, queue, elapsed
-        end
+        track stats, worker_instance, msg, queue, start_time, 'processed'
 
         result
+      rescue
+        stats = ::Sidekiq::Stats.new
+        track stats, worker_instance, msg, queue, start_time, 'failed'
+        raise
       end
 
       private
 
-      def track(tracking_group, stats, worker_instance, msg, queue, elapsed)
-        submit_general_stats tracking_group, stats
-        return unless allowed_to_submit queue, worker_instance
-        # puts "doing Librato insert"
-        tracking_group.group queue.to_s do |q|
-          q.increment 'processed'
-          q.timing 'time', elapsed
-          q.measure 'enqueued', stats.queues[queue].to_i
-          q.timing 'latency', ::Sidekiq::Queue.new(queue).latency
+      def track(stats, worker_instance, msg, queue, start_time, status_bucket)
+        elapsed = (Time.now - start_time).to_f
+        Librato.group 'sidekiq' do |sidekiq|
+          submit_general_stats sidekiq, stats
+          sidekiq.increment 'retried' if msg.key? 'retry_count'
+          next unless allowed_to_submit queue, worker_instance
+          sidekiq.group queue.to_s do |q|
+            q.increment status_bucket
+            q.timing 'time', elapsed
+            q.measure 'enqueued', stats.queues[queue].to_i
+            q.timing 'latency', ::Sidekiq::Queue.new(queue).latency
+            q.increment 'retried' if msg.key? 'retry_count'
 
-          next unless class_metrics_enabled
+            next unless class_metrics_enabled
 
-          # using something like User.delay.send_email invokes
-          # a class name with slashes. remove them in favor of underscores
-          q.group msg['class'].underscore.gsub('/', '_') do |w|
-            w.increment 'processed'
-            w.timing 'time', elapsed
+            # using something like User.delay.send_email invokes
+            # a class name with slashes. remove them in favor of underscores
+            q.group msg['class'].underscore.gsub('/', '_') do |w|
+              w.increment status_bucket
+              w.increment 'retried' if msg.key? :retry_count
+              w.timing 'time', elapsed
+            end
           end
         end
       end
